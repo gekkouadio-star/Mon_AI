@@ -136,7 +136,7 @@
         userInput.value = "";
 
         try {
-            const response = await fetch("http://0.0.0.0:8000/chat", {
+            const response = await fetch("https://mon-ai.onrender.com/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: message, sessionId: sessionId })
