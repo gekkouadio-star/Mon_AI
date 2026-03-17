@@ -8,30 +8,35 @@ import random
 import os
 from dotenv import load_dotenv
 
+# Charger les variables d'environnement depuis le fichier .env (ex: API_KEY)
 load_dotenv()
 
- 
+# Initialisation de l'application FastAPI
 app = FastAPI()
- 
+
+# Configuration du Middleware CORS pour permettre au frontend (Portfolio) de communiquer avec l'API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # Autorise toutes les origines
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], # Autorise toutes les méthodes (GET, POST, etc.)
+    allow_headers=["*"], # Autorise tous les headers
 )
  
-# --- CONFIGURATION ---
+# --- CONFIGURATION DES PARAMÈTRES D'API ---
+# Récupération de la clé API Google Gemini depuis les variables d'environnement
 API_KEY = os.getenv("API_KEY")
 
+# URL de l'API Google Gemini (modèle Flash 2.5) pour la génération de contenu
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
  
+# Définition du modèle de données pour les requêtes entrantes
 class ChatRequest(BaseModel):
-    message: str
-    sessionId: str
+    message: str # Le message envoyé par l'utilisateur
+    sessionId: str # L'identifiant de la session de chat
  
 # ======================================================
-# PROFIL OFFICIEL
+# PROFIL OFFICIEL : Base de connaissances sur Gérard KOUADIO
 # ======================================================
 PROFILE_TEXT = """
 Gérard KOUADIO est Data Engineer, Data Analyst, Data Scientist
@@ -74,7 +79,7 @@ Contact :
 """
 
 # ======================================================
-# QUESTIONS ENTRETIEN DATA
+# QUESTIONS ENTRETIEN DATA : FAQ pour simuler un entretien
 # ======================================================
 INTERVIEW_QA = """
 
@@ -166,7 +171,7 @@ Python offre une flexibilité totale, permettant de passer de l'extraction SQL �
 """
 
 # ======================================================
-# REGLES LLM
+# RÈGLES DU LLM : Instructions pour le comportement de l'IA
 # ======================================================
 ASSISTANT_RULES = """
 
@@ -177,7 +182,7 @@ Si inconnu : dis lui qu'il reformule la question autrement stp.
 """
 
 # ======================================================
-# CONVERSATION NATURELLE
+# CONVERSATION NATURELLE : Réponses prédéfinies (Hardcoded)
 # ======================================================
 GREETINGS = ["bonjour","salut","hello","bonsoir","hey","coucou"]
 THANKS = ["merci","merci beaucoup","thanks"]
@@ -202,7 +207,7 @@ HOW_RESPONSES = [
 ]
 
 # ======================================================
-# QUESTIONS OUVERTES GENERALES
+# QUESTIONS OUVERTES GÉNÉRALES : Dictionnaire de réponses directes
 # ======================================================
 OPEN_QUESTIONS = {
     
@@ -305,41 +310,44 @@ OPEN_QUESTIONS = {
     }
 
 # ======================================================
-# DETECTION INTENTION
+# DÉTECTION D'INTENTION : Fonction utilitaire
 # ======================================================
 def contains(text, patterns):
+    # Vérifie si l'un des mots-clés est présent dans le texte utilisateur
     return any(p in text for p in patterns)
 
 # ======================================================
-# ROUTE PRINCIPALE
+# ROUTE PRINCIPALE DU CHAT : Logique de réponse
 # ======================================================
 @app.post("/chat")
 async def chat(request: ChatRequest):
 
+    # Nettoyage du message utilisateur (minuscule et suppression des espaces inutiles)
     msg = request.message.lower().strip()
 
-    # ----- SALUTATION -----
+    # 1. Gestion des Salutations
     if contains(msg, GREETINGS):
         return {"reply": random.choice(GREETING_RESPONSES)}
 
-    # ----- MERCI -----
+    # 2. Gestion des Remerciements
     if contains(msg, THANKS):
         return {"reply": random.choice(THANKS_RESPONSES)}
 
-    # ----- ETAT -----
+    # 3. Gestion des questions sur l'état ("ça va ?")
     if contains(msg, HOW_ARE_YOU):
         return {"reply": random.choice(HOW_RESPONSES)}
 
-    # ----- HEURE -----
+    # 4. Demande de l'heure actuelle
     if "heure" in msg:
         return {"reply": f"Il est actuellement {datetime.now().strftime('%H:%M')}."}
 
-    # ----- QUESTIONS OUVERTES -----
+    # 5. Recherche dans le dictionnaire des Questions Ouvertes
     for key, value in OPEN_QUESTIONS.items():
         if key in msg:
             return {"reply": value}
 
-    # ----- LLM POUR QUESTIONS COMPLEXES -----
+    # 6. APPEL AU LLM (GEMINI) : Pour les questions complexes non gérées au-dessus
+    # Construction du prompt envoyé à l'IA avec tout le contexte nécessaire
     prompt = (
         f"{ASSISTANT_RULES}\n\n"
         f"PROFIL : {PROFILE_TEXT}\n\n"
@@ -347,30 +355,41 @@ async def chat(request: ChatRequest):
         f"QUESTION : {request.message}"
     )
 
+    # Préparation du corps de la requête pour l'API Google
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
+    # Utilisation d'un client HTTP asynchrone pour ne pas bloquer l'API
     async with httpx.AsyncClient() as client:
         try:
+            # Envoi de la requête POST vers Google Gemini
             response = await client.post(URL, json=payload, timeout=30.0)
             data = response.json()
 
+            # Gestion des erreurs API Google (code différent de 200)
             if response.status_code != 200:
                 error_msg = data.get('error', {}).get('message', 'Erreur inconnue')
                 return {"reply": f"Erreur Google ({response.status_code}) : {error_msg}"}
 
+            # Extraction de la réponse générée par l'IA
             if "candidates" in data and data["candidates"]:
                 reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 return {"reply": reply}
 
+            # Cas où l'API répond mais sans texte généré
             return {"reply": "Je n'ai pas pu générer de réponse."}
 
         except Exception as e:
+            # Gestion des erreurs réseau ou timeout
             return {"reply": f"Erreur de connexion : {str(e)}"}
  
+# ======================================================
+# DÉMARRAGE DU SERVEUR
+# ======================================================
 if __name__ == "__main__":
     import os
     import uvicorn
 
+    # Récupération du port défini par l'hébergeur (ex: Render, Heroku) ou 8000 par défaut
     port = int(os.environ.get("PORT", 8000))
+    # Lancement du serveur Uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port)
- 

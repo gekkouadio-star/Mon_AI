@@ -5,26 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpeakGérard - IA Portfolio</title>
  
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
  
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
  
-    <!-- Markdown Parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
  
     <style>
+        /* Styles personnalisés pour compléter Tailwind */
         body { background-color: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
  
+        /* Zone de défilement des messages avec barre de scroll fine */
         .chat-container { height: 500px; scrollbar-width: thin; scrollbar-color: #334155 transparent; }
  
+        /* Style des messages envoyés par l'utilisateur (bleu dégradé, aligné à droite) */
         .user-msg {
             background: linear-gradient(135deg, #3b82f6, #2563eb);
             align-self: flex-end;
             border-radius: 18px 18px 2px 18px;
         }
  
+        /* Style des messages envoyés par le bot (sombre, aligné à gauche) */
         .bot-msg {
             background-color: #1e293b;
             align-self: flex-start;
@@ -32,6 +33,7 @@
             border-radius: 18px 18px 18px 2px;
         }
  
+        /* Effet de transparence "Glassmorphism" pour le conteneur principal */
         .glass {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(10px);
@@ -55,7 +57,6 @@
             Data Engineer, Scientist & Analyste Risques
         </p>
 
-        <!-- CONTACTS -->
         <div class="flex justify-center gap-6 mt-3 text-sm">
 
             <a href="mailto:gekkouadio@gmail.com"
@@ -87,7 +88,7 @@
                 Bonjour ! Je suis le jumeau numérique de Gérard KOUADIO.
                 Je connais son parcours, ses projets Data et ses compétences.
                 Que voulez-vous savoir 🧠?
-            </div>
+        </div>
 
         <div id="chat" class="chat-container p-6 flex flex-col gap-4 overflow-y-auto"></div>
  
@@ -103,15 +104,25 @@
     </div>
  
 <script>
+    /* Configuration de Marked pour gérer les retours à la ligne et le formatage GitHub */
     marked.setOptions({ breaks: true, gfm: true });
 
+    /* Gestion de la session utilisateur : on crée ou récupère un ID unique pour le chat */
     let sessionId = localStorage.getItem("Gérard_sid") || crypto.randomUUID();
     localStorage.setItem("Gérard_sid", sessionId);
 
+    /* Récupération des éléments HTML pour manipulation JS */
     const chatDiv = document.getElementById("chat");
     const userInput = document.getElementById("userInput");
     const sendBtn = document.getElementById("sendBtn");
 
+    /**
+     * Ajoute un message dans l'interface
+     * @param {string} sender - Nom de l'expéditeur (Vous / Gérard IA)
+     * @param {string} text - Contenu du message
+     * @param {string} className - Classe CSS pour le style (user-msg ou bot-msg)
+     * @param {boolean} isBot - Si vrai, utilise le parser Markdown
+     */
     function appendMessage(sender, text, className, isBot=false) {
         const msgDiv = document.createElement("div");
         msgDiv.className = `p-4 max-w-[85%] text-sm leading-relaxed shadow-sm ${className}`;
@@ -122,20 +133,28 @@
             </span>
         `;
 
+        // Si c'est le bot, on transforme le Markdown en HTML. Sinon, texte brut.
         msgDiv.innerHTML = isBot ? header + marked.parse(text) : header + text;
 
         chatDiv.appendChild(msgDiv);
+        
+        // Scroll automatique vers le bas pour voir le dernier message
         chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
+    /**
+     * Gère l'envoi du message vers l'API Python (Render)
+     */
     async function sendMessage() {
         const message = userInput.value.trim();
-        if (!message) return;
+        if (!message) return; // Ne rien faire si le champ est vide
 
+        // 1. Afficher le message de l'utilisateur
         appendMessage("Vous", message, "user-msg text-white");
-        userInput.value = "";
+        userInput.value = ""; // Vider le champ
 
         try {
+            // 2. Appel vers ton API FastAPI déployée sur Render
             const response = await fetch("https://mon-ai.onrender.com/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -143,14 +162,20 @@
             });
 
             const data = await response.json();
+            
+            // 3. Afficher la réponse de l'IA
             appendMessage("Gérard IA", data.reply, "bot-msg", true);
 
         } catch (e) {
+            // Gestion des erreurs de connexion (ex: serveur éteint ou mauvaise URL)
             appendMessage("Erreur", "Vérifiez que le serveur Python tourne bien !", "bot-msg text-red-400");
         }
     }
 
+    /* Écouteur de clic sur le bouton d'envoi */
     sendBtn.addEventListener("click", sendMessage);
+
+    /* Écouteur de touche "Entrée" dans le champ de saisie */
     userInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMessage();
     });
